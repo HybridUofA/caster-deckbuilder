@@ -1,3 +1,3 @@
 module github.com/HybridUofA/caster-deckbuilder
 
-go 1.24
+go 1.22
