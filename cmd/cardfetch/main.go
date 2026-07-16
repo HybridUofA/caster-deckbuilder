@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"github.com/HybridUofA/caster-deckbuilder/internal/speedrobo"
 	"github.com/HybridUofA/caster-deckbuilder/internal/updates"
 )
@@ -19,11 +21,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	response, err := speedrobo.FetchPage(client, config.AjaxURL, config.Nonce, 1)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	cards, err := updates.FetchAllCards(client, config)
 	if err != nil {
 		log.Fatal(err)
@@ -31,13 +28,15 @@ func main() {
 
 	fmt.Printf("Downloaded %d cards\n", len(cards))
 
-	fmt.Printf("Success: %t\n", response.Success)
-	fmt.Printf("Total cards: %d\n", response.Data.Total)
-	fmt.Printf("Current page: %d\n", response.Data.Page)
-	fmt.Printf("Total pages: %d\n", response.Data.Pages)
-	fmt.Printf("Cards received: %d\n", len(response.Data.Cards))
-
-	if len(response.Data.Cards) > 0 {
-		fmt.Printf("First card: %s\n", response.Data.Cards[0].CardKey,)
+	cardJSON, err := json.MarshalIndent(cards, "", " ")
+	if err != nil {
+		log.Fatalf("encode cards as JSON: %v", err)
 	}
+	cardJSON = append(cardJSON, '\n')
+
+	if err := os.WriteFile("data/cards.json", cardJSON, 0644); err != nil {
+		log.Fatalf("Write card database: %v", err)
+	}
+
+	fmt.Printf("Saved %d cards to data/cards.json\n", len(cards))
 }
