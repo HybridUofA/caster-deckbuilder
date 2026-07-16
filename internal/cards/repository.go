@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -11,6 +12,15 @@ type Repository struct {
 	cards  []Card
 	byID   map[string]Card
 	byName map[string][]Card
+}
+
+type Filter struct {
+	Name           string
+	Elements       []string
+	Types          []string
+	Traits         []string
+	Expansions     []string
+	IncludeTesting bool
 }
 
 func LoadFile(path string) (*Repository, error) {
@@ -27,7 +37,7 @@ func LoadFile(path string) (*Repository, error) {
 	repository, err := NewRepository(cards)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"build repository from %q, %w",
+			"build repository from %q: %w",
 			path,
 			err,
 		)
@@ -75,7 +85,7 @@ func NewRepository(cards []Card) (*Repository, error) {
 		repository.cards = append(repository.cards, card)
 		repository.byID[card.ID] = card
 
-		nameKey := normalizeName(card.Name)
+		nameKey := normalizeText(card.Name)
 
 		repository.byName[nameKey] = append(
 			repository.byName[nameKey],
@@ -86,8 +96,8 @@ func NewRepository(cards []Card) (*Repository, error) {
 	return repository, nil
 }
 
-func normalizeName(name string) string {
-	return strings.ToLower(strings.TrimSpace(name))
+func normalizeText(text string) string {
+	return strings.ToLower(strings.TrimSpace(text))
 }
 
 func (repository *Repository) FindByID(id string) (Card, bool) {
@@ -96,7 +106,7 @@ func (repository *Repository) FindByID(id string) (Card, bool) {
 }
 
 func (repository *Repository) FindByName(name string) []Card {
-	matches := repository.byName[normalizeName(name)]
+	matches := repository.byName[normalizeText(name)]
 
 	result := make([]Card, len(matches))
 	copy(result, matches)
@@ -105,7 +115,7 @@ func (repository *Repository) FindByName(name string) []Card {
 }
 
 func (repository *Repository) SearchByName(query string) []Card {
-	normalizedQuery := normalizeName(query)
+	normalizedQuery := normalizeText(query)
 
 	if normalizedQuery == "" {
 		return []Card{}
@@ -114,11 +124,64 @@ func (repository *Repository) SearchByName(query string) []Card {
 	var matches []Card
 
 	for _, card := range repository.cards {
-		normalizedCardName := normalizeName(card.Name)
+		normalizedCardName := normalizeText(card.Name)
 
 		if strings.Contains(normalizedCardName, normalizedQuery) {
 			matches = append(matches, card)
 		}
+	}
+
+	return matches
+}
+
+func containsNormalized(values []string, target string) bool {
+	normalizedTarget := normalizeText(target)
+
+	for _, value := range values {
+		if strings.Contains(normalizeText(value), normalizedTarget) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (repository *Repository) Filter(options Filter) []Card {
+	normalizedName := normalizeText(options.Name)
+
+	var matches []Card
+
+	for _, card := range repository.cards {
+		if normalizedName != "" &&
+			!strings.Contains(normalizeText(card.Name), normalizedName) {
+			continue
+		}
+
+		if len(options.Elements) > 0 &&
+			!containsNormalized(options.Elements, card.Element) {
+			continue
+		}
+
+		if len(options.Types) > 0 &&
+			!containsNormalized(options.Types, card.Type) {
+			continue
+		}
+
+		if len(options.Traits) > 0 &&
+			!containsNormalized(options.Traits, card.Traits) {
+			continue
+		}
+
+		if len(options.Expansions) > 0 &&
+			!containsNormalized(options.Expansions, card.Expansion) {
+			continue
+		}
+
+		if !options.IncludeTesting && card.IsPlaytesting {
+			continue
+		}
+
+		matches = append(matches, card)
 	}
 
 	return matches
@@ -129,4 +192,70 @@ func (repository *Repository) All() []Card {
 	copy(result, repository.cards)
 
 	return result
+}
+
+func uniqueSortedValues(values []string) []string {
+	unique := make(map[string]string)
+
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+
+		key := normalizeText(value)
+		if _, exists := unique[key]; !exists {
+			unique[key] = value
+		}
+	}
+
+	results := make([]string, 0, len(unique))
+
+	for _, value := range unique {
+		results = append(results, value)
+	}
+
+	sort.Strings(results)
+
+	return results
+}
+
+func (repository *Repository) Elements() []string {
+	values := make([]string, 0, len(repository.cards))
+
+	for _, card := range repository.cards {
+		values = append(values, card.Element)
+	}
+
+	return uniqueSortedValues(values)
+}
+
+func (repository *Repository) Types() []string {
+	values := make([]string, 0, len(repository.cards))
+
+	for _, card := range repository.cards {
+		values = append(values, card.Type)
+	}
+
+	return uniqueSortedValues(values)
+}
+
+func (repository *Repository) Traits() []string {
+	values := make([]string, 0, len(repository.cards))
+
+	for _, card := range repository.cards {
+		values = append(values, card.Traits)
+	}
+
+	return uniqueSortedValues(values)
+}
+
+func (repository *Repository) Expansions() []string {
+	values := make([]string, 0, len(repository.cards))
+
+	for _, card := range repository.cards {
+		values = append(values, card.Expansion)
+	}
+
+	return uniqueSortedValues(values)
 }
