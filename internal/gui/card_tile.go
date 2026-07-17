@@ -4,9 +4,10 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/driver/desktop"
-	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
+	"fyne.io/fyne/v2/theme"
 
+	"github.com/HybridUofA/caster-deckbuilder/internal/cardimages"
 	"github.com/HybridUofA/caster-deckbuilder/internal/cards"
 )
 
@@ -32,11 +33,17 @@ func NewCardTile(
 		OnRightClick: onRightClick,
 	}
 
-	uri, err := storage.ParseURI(card.ImageURL)
-	if err == nil {
-		tile.image = canvas.NewImageFromURI(uri)
+	thumbPath, found := cardimages.FindThumbnail(card.ID)
+
+	if found {
+		tile.image = canvas.NewImageFromFile(thumbPath)
 	} else {
-		tile.image = canvas.NewImageFromResource(nil)
+		fullPath, found := cardimages.Find(card.ID)
+		if found {
+			tile.image = canvas.NewImageFromFile(fullPath)
+		} else {
+			tile.image = canvas.NewImageFromResource(theme.BrokenImageIcon())
+		}
 	}
 
 	tile.image.FillMode = canvas.ImageFillContain

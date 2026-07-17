@@ -11,9 +11,9 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/HybridUofA/caster-deckbuilder/internal/cardimages"
 	"github.com/HybridUofA/caster-deckbuilder/internal/cards"
 	"github.com/HybridUofA/caster-deckbuilder/internal/decks"
 	deckgui "github.com/HybridUofA/caster-deckbuilder/internal/gui"
@@ -35,6 +35,28 @@ func checkedValues(
 	return selected
 }
 
+const anyOption = "- Any -"
+
+func withAnyOption(options []string) []string {
+	result := make(
+		[]string,
+		0,
+		len(options)+1,
+	)
+	result = append(result,anyOption)
+	result = append(result, options...)
+
+	return result
+}
+
+func optionalSelection(value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" || value == anyOption {
+		return nil
+	}
+	return []string{value}
+}
+
 func optionalValue(value string) []string {
 	value = strings.TrimSpace(value)
 
@@ -46,6 +68,9 @@ func optionalValue(value string) []string {
 }
 
 func main() {
+
+	const previewWidth float32 = 160
+	const previewHeight float32 = 224
 	repository, err := cards.LoadFile("data/cards.json")
 	if err != nil {
 		log.Fatal(err)
@@ -83,7 +108,7 @@ func main() {
 		color.Transparent,
 	)
 	previewBackground.SetMinSize(
-		fyne.NewSize(220, 308),
+		fyne.NewSize(previewWidth, previewHeight),
 	)
 
 	previewMessage := widget.NewLabel(
@@ -117,8 +142,7 @@ func main() {
 				"Cost/Lv: %s\n"+
 				"Traits: %s\n"+
 				"Expansion: %s\n"+
-				"Card Number: %s\n"+
-				"Card ID: %s\n\n"+
+				"Card Number: %s\n\n"+
 				"%s",
 			card.Type,
 			card.Element,
@@ -126,34 +150,24 @@ func main() {
 			card.Traits,
 			card.Expansion,
 			card.CardNumber,
-			card.ID,
 			card.Ability,
 		))
 
-		imageURL := strings.TrimSpace(card.ImageURL)
-		if imageURL == "" {
-			showPreviewMessage("No image available")
-			return
-		}
-
-		uri, parseErr := storage.ParseURI(imageURL)
-		if parseErr != nil {
-			showPreviewMessage("Invalid image URL")
-
-			fmt.Printf(
-				"could not parse image URL for %s: %v\n",
-				card.Name,
-				parseErr,
-			)
-
-			return
-		}
-
-		cardImage := canvas.NewImageFromURI(uri)
-		cardImage.FillMode = canvas.ImageFillContain
-		cardImage.SetMinSize(
-			fyne.NewSize(220, 308),
+		localImagePath, found := cardimages.Find(
+			card.ID,
 		)
+		if !found {
+			showPreviewMessage(
+				"Image has not been downloaded",
+			)
+			return
+		}
+
+		cardImage := canvas.NewImageFromFile(
+			localImagePath,
+		)
+		cardImage.FillMode = canvas.ImageFillContain
+		cardImage.ScaleMode = canvas.ImageScaleSmooth
 
 		cardPreview.RemoveAll()
 		cardPreview.Add(previewBackground)
@@ -161,21 +175,32 @@ func main() {
 		cardPreview.Refresh()
 	}
 
-	leftContent := container.NewVBox(
-		cardPreview,
-		widget.NewSeparator(),
+	detailsScroll := container.NewVScroll(cardDetailsLabel)
+
+	detailsScroll.SetMinSize(fyne.NewSize(0, 180))
+
+	detailsPanel := container.NewBorder(
 		cardNameLabel,
-		cardDetailsLabel,
+		nil,
+		nil,
+		nil,
+		detailsScroll,
 	)
+
+	leftBody := container.NewVSplit(
+		cardPreview,
+		detailsPanel,
+	)
+
+	leftBody.SetOffset(0.58)
 
 	leftPanel := container.NewBorder(
 		widget.NewLabel("Card Information"),
 		nil,
 		nil,
 		nil,
-		container.NewVScroll(leftContent),
+		leftBody,
 	)
-
 	/*
 		Center panel: deck controls and deck zones
 	*/
@@ -199,11 +224,11 @@ func main() {
 	)
 
 	mainDeckGrid := container.NewGridWrap(
-		fyne.NewSize(100, 140),
+		fyne.NewSize(130, 182),
 	)
 
 	sideDeckGrid := container.NewGridWrap(
-		fyne.NewSize(100, 140),
+		fyne.NewSize(130, 182),
 	)
 
 	mainDeckLabel := widget.NewLabel(
@@ -345,38 +370,27 @@ func main() {
 		Right panel: card search filters and results
 	*/
 
-	var selectedType string
-	var selectedTrait string
-	var selectedExpansion string
 
 	typeSelect := widget.NewSelect(
-		repository.Types(),
-		func(value string) {
-			selectedType = value
-		},
+		withAnyOption(repository.Types()),
+		nil,
 	)
-	typeSelect.PlaceHolder = "Any type"
+	typeSelect.SetSelected(anyOption)
 
 	traitSelect := widget.NewSelect(
-		repository.Traits(),
-		func(value string) {
-			selectedTrait = value
-		},
+		withAnyOption(repository.Traits()),
+		nil,
 	)
-	traitSelect.PlaceHolder = "Any trait"
+	traitSelect.SetSelected(anyOption)
 
 	expansionSelect := widget.NewSelect(
-		repository.Expansions(),
-		func(value string) {
-			selectedExpansion = value
-		},
+		withAnyOption(repository.Expansions()),
+		nil,
 	)
-	expansionSelect.PlaceHolder = "Any expansion"
+	expansionSelect.SetSelected(anyOption)
 
 	searchEntry := widget.NewEntry()
-	searchEntry.SetPlaceHolder(
-		"Search card names...",
-	)
+	searchEntry.SetPlaceHolder("Search card names...")
 
 	costEntry := widget.NewEntry()
 	costEntry.SetPlaceHolder(
@@ -419,105 +433,143 @@ func main() {
 	)
 
 	searchResultsGrid := container.NewGridWrap(
-		fyne.NewSize(110, 154),
+		fyne.NewSize(140, 196),
 	)
 
 	resultCountLabel := widget.NewLabel(
 		"No search performed",
 	)
 
+	runSearch := func() {
+		filter := cards.Filter{
+			Name: searchEntry.Text,
+
+			Elements: checkedValues(
+				elementOptions,
+				elementChecks,
+			),
+
+			Types: optionalSelection(
+				typeSelect.Selected,
+			),
+
+			Traits: optionalSelection(
+				traitSelect.Selected,
+			),
+
+			CostLevels: optionalValue(
+				costEntry.Text,
+			),
+
+			Expansions: optionalSelection(
+				expansionSelect.Selected,
+			),
+
+			IncludeTesting: includeTestingCheck.Checked,
+		}
+
+		matches := repository.Filter(filter)
+
+		resultCountLabel.SetText(fmt.Sprintf(
+			"%d matching card(s)",
+			len(matches),
+		))
+
+		searchResultsGrid.RemoveAll()
+
+		for _, match := range matches {
+			matchedCard := match
+
+			cardTile := deckgui.NewCardTile(
+				matchedCard,
+
+				/*
+					Left-click:
+					Show the card in the preview panel.
+				*/
+				func(selected cards.Card) {
+					showCard(selected)
+				},
+
+				/*
+					Right-click:
+					Add one copy to the main deck.
+
+					Shift + right-click:
+					Add one copy to the side deck.
+				*/
+				func(
+					selected cards.Card,
+					shiftHeld bool,
+				) {
+					zone := decks.MainZone
+
+					if shiftHeld {
+						zone = decks.SideZone
+					}
+
+					addErr := deck.AddCard(
+						zone,
+						selected.ID,
+						1,
+					)
+					if addErr != nil {
+						dialog.ShowError(
+							addErr,
+							window,
+						)
+						return
+					}
+
+					refreshDeckDisplay()
+				},
+			)
+
+			searchResultsGrid.Add(cardTile)
+		}
+
+		searchResultsGrid.Refresh()
+	}
+
+	updatingFilters := false
+
+	typeSelect.OnChanged = func(_ string) {
+		if !updatingFilters {
+			runSearch()
+		}
+	}
+
+	traitSelect.OnChanged = func(_ string) {
+		if !updatingFilters {
+			runSearch()
+		}
+	}
+
+	expansionSelect.OnChanged = func(_ string) {
+		if !updatingFilters {
+			runSearch()
+		}
+	}
+
+	for _, check := range elementChecks {
+		check.OnChanged = func(_ bool) {
+			if !updatingFilters {
+				runSearch()
+			}
+		}
+	}
+
+	includeTestingCheck.OnChanged = func(_ bool) {
+		if updatingFilters {
+			return
+		}
+
+		runSearch()
+	}
+
 	searchButton := widget.NewButton(
 		"Search",
-		func() {
-			filter := cards.Filter{
-				Name: searchEntry.Text,
-
-				Elements: checkedValues(
-					elementOptions,
-					elementChecks,
-				),
-
-				Types: optionalValue(
-					selectedType,
-				),
-
-				Traits: optionalValue(
-					selectedTrait,
-				),
-
-				CostLevels: optionalValue(
-					costEntry.Text,
-				),
-
-				Expansions: optionalValue(
-					selectedExpansion,
-				),
-
-				IncludeTesting: includeTestingCheck.Checked,
-			}
-
-			matches := repository.Filter(filter)
-
-			resultCountLabel.SetText(fmt.Sprintf(
-				"%d matching card(s)",
-				len(matches),
-			))
-
-			searchResultsGrid.RemoveAll()
-
-			for _, match := range matches {
-				matchedCard := match
-
-				cardTile := deckgui.NewCardTile(
-					matchedCard,
-
-					/*
-						Left-click:
-						Show the card in the preview panel.
-					*/
-					func(selected cards.Card) {
-						showCard(selected)
-					},
-
-					/*
-						Right-click:
-						Add one copy to the main deck.
-
-						Shift + right-click:
-						Add one copy to the side deck.
-					*/
-					func(
-						selected cards.Card,
-						shiftHeld bool,
-					) {
-						zone := decks.MainZone
-
-						if shiftHeld {
-							zone = decks.SideZone
-						}
-
-						addErr := deck.AddCard(
-							zone,
-							selected.ID,
-							1,
-						)
-						if addErr != nil {
-							dialog.ShowError(
-								addErr,
-								window,
-							)
-							return
-						}
-
-						refreshDeckDisplay()
-					},
-				)
-
-				searchResultsGrid.Add(cardTile)
-			}
-
-			searchResultsGrid.Refresh()
-		},
+		runSearch,
 	)
 
 	clearButton := widget.NewButton(
@@ -530,18 +582,15 @@ func main() {
 				check.SetChecked(false)
 			}
 
-			typeSelect.ClearSelected()
-			traitSelect.ClearSelected()
-			expansionSelect.ClearSelected()
-
-			selectedType = ""
-			selectedTrait = ""
-			selectedExpansion = ""
+			typeSelect.SetSelected(anyOption)
+			traitSelect.SetSelected(anyOption)
+			expansionSelect.SetSelected(anyOption)
 
 			includeTestingCheck.SetChecked(false)
 
-			searchResultsGrid.RemoveAll()
-			searchResultsGrid.Refresh()
+			updatingFilters = false
+
+			runSearch()
 
 			resultCountLabel.SetText(
 				"Filters cleared",
@@ -598,7 +647,7 @@ func main() {
 		leftPanel,
 		centerPanel,
 	)
-	leftCenter.SetOffset(0.23)
+	leftCenter.SetOffset(0.28)
 
 	root := container.NewHSplit(
 		leftCenter,
@@ -609,5 +658,6 @@ func main() {
 	refreshDeckDisplay()
 
 	window.SetContent(root)
+	runSearch()
 	window.ShowAndRun()
 }

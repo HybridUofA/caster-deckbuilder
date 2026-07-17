@@ -135,11 +135,23 @@ func (repository *Repository) SearchByName(query string) []Card {
 	return matches
 }
 
-func containsNormalized(values []string, target string) bool {
-	normalizedTarget := normalizeText(target)
+func matchesAnySelected(
+	cardValue string,
+	selectedValues []string,
+) bool {
+	normalizedCard := normalizeText(cardValue)
 
-	for _, value := range values {
-		if strings.Contains(normalizeText(value), normalizedTarget) {
+	for _, selected := range selectedValues {
+		normalizedSelected := normalizeText(selected)
+
+		if normalizedSelected == "" {
+			continue
+		}
+
+		if strings.Contains(
+			normalizedCard,
+			normalizedSelected,
+		) {
 			return true
 		}
 	}
@@ -159,27 +171,31 @@ func (repository *Repository) Filter(options Filter) []Card {
 		}
 
 		if len(options.Elements) > 0 &&
-			!matchesAnyExact(options.Elements, card.Element) {
+			!matchesAnySelected(card.Element, options.Elements) {
 			continue
 		}
 
 		if len(options.Types) > 0 &&
-			!matchesAnyExact(options.Types, card.Type) {
+			!matchesAnySelected(card.Type, options.Types) {
 			continue
 		}
 
 		if len(options.Traits) > 0 &&
-			!matchesAnyContained(options.Traits, card.Traits) {
+			!matchesAnySelected(card.Traits, options.Traits) {
 			continue
 		}
 
 		if len(options.CostLevels) > 0 &&
-			!matchesAnyExact(options.CostLevels, card.CostLevel) {
+			!matchesAnySelected(card.CostLevel, options.CostLevels) {
 			continue
 		}
 
 		if len(options.Expansions) > 0 &&
-			!matchesAnyExact(options.Expansions, card.Expansion) {
+			!matchesAnySelected(card.Expansion, options.Expansions) {
+			continue
+		}
+
+		if card.IsPlaytesting && !options.IncludeTesting {
 			continue
 		}
 
@@ -243,13 +259,42 @@ func (repository *Repository) Types() []string {
 }
 
 func (repository *Repository) Traits() []string {
-	values := make([]string, 0, len(repository.cards))
+	unique := make(map[string]string)
 
 	for _, card := range repository.cards {
-		values = append(values, card.Traits)
+		for _, trait := range splitTraits(card.Traits) {
+			key := normalizeText(trait)
+
+			if key == "" {
+				continue
+			}
+
+			// Preserve the first spelling encountered.
+			if _, exists := unique[key]; !exists {
+				unique[key] = trait
+			}
+		}
 	}
 
-	return uniqueSortedValues(values)
+	traits := make(
+		[]string,
+		0,
+		len(unique),
+	)
+
+	for _, trait := range unique {
+		traits = append(traits, trait)
+	}
+
+	sort.Slice(
+		traits,
+		func(i, j int) bool {
+			return strings.ToLower(traits[i]) <
+				strings.ToLower(traits[j])
+		},
+	)
+
+	return traits
 }
 
 func (repository *Repository) CostLevels() []string {
@@ -297,4 +342,57 @@ func matchesAnyContained(values []string, target string) bool {
 	}
 
 	return false
+}
+
+func splitTraits(value string) []string {
+	raw := strings.TrimSpace(value)
+	if raw == "" {
+		return nil
+	}
+
+	traits := make([]string, 0)
+	remaining := raw
+
+	for {
+		open := strings.Index(remaining, "[")
+		if open == -1 {
+			break
+		}
+
+		closeOffset := strings.Index(
+			remaining[open+1:],
+			"]",
+		)
+		if closeOffset == -1 {
+			break
+		}
+
+		close := open + 1 + closeOffset
+
+		trait := strings.TrimSpace(
+			remaining[open+1 : close],
+		)
+		if trait != "" {
+			traits = append(traits, trait)
+		}
+		remaining = remaining[close+1:]
+	}
+	if len(traits) > 0 {
+		return traits
+	}
+
+	for _, trait := range strings.FieldsFunc(
+		raw,
+		func(r rune) bool {
+			return r == ',' || r == ';'
+		},
+	) {
+		trait = strings.TrimSpace(trait)
+
+		if trait != "" {
+			traits = append(traits, trait)
+		}
+	}
+
+	return traits
 }
