@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"log"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -531,6 +532,15 @@ func main() {
 		searchResultsGrid.Refresh()
 	}
 
+	var searchTimer *time.Timer
+
+	scheduleSearch := func() {
+		if searchTimer != nil {
+			searchTimer.Stop()
+		}
+		searchTimer = time.AfterFunc(250 * time.Millisecond, func() {fyne.Do(runSearch)})
+	}
+
 	updatingFilters := false
 
 	typeSelect.OnChanged = func(_ string) {
@@ -567,6 +577,22 @@ func main() {
 		runSearch()
 	}
 
+	searchEntry.OnChanged = func(_ string) {
+		if updatingFilters {
+			return
+		}
+
+		scheduleSearch()
+	}
+
+	searchEntry.OnSubmitted = func(_ string) {
+		if searchTimer != nil {
+			searchTimer.Stop()
+			searchTimer = nil
+		}
+		runSearch()
+	}
+
 	searchButton := widget.NewButton(
 		"Search",
 		runSearch,
@@ -575,6 +601,13 @@ func main() {
 	clearButton := widget.NewButton(
 		"Clear",
 		func() {
+			if searchTimer != nil {
+				searchTimer.Stop()
+				searchTimer = nil
+			}
+
+			updatingFilters = true
+			
 			searchEntry.SetText("")
 			costEntry.SetText("")
 
