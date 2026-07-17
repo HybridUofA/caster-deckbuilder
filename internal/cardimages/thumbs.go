@@ -3,9 +3,9 @@ package cardimages
 import (
 	"fmt"
 	"image"
-	_ "image/jpeg"
 	_ "image/gif"
 	"image/jpeg"
+	_ "image/jpeg"
 	_ "image/png"
 	"os"
 	"path/filepath"

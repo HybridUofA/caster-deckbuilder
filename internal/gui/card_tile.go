@@ -25,60 +25,102 @@ type CardTile struct {
 	OnSelected   func(cards.Card)
 	OnRightClick func(cards.Card, bool)
 
-	DragZone decks.Zone
-	DragIndex int
+	dragSource  *CardDragSource
+	OnDragStart CardDragCallback
+	OnDragMove  CardDragCallback
+	OnDragEnd   CardDragCallback
 
-	OnDragFinished func(
-		fromZone decks.Zone,
-		fromIndex int,
-		position fyne.Position,
-	)
-
+	dragging         bool
 	lastDragPosition fyne.Position
 }
 
-func (tile *CardTile) EnableDeckDrag(
-	zone decks.Zone,
-	index int,
-	onFinished func(
-		decks.Zone,
-		int,
-		fyne.Position,
-	),
-) {
-	tile.DragZone = zone
-	tile.DragIndex = index
-	tile.OnDragFinished = onFinished
+var _ fyne.Draggable = (*CardTile)(nil)
+var _ desktop.Mouseable = (*CardTile)(nil)
+
+type CardDragSourceKind int
+
+const (
+	DragFromSearch CardDragSourceKind = iota
+	DragFromDeck
+)
+
+type CardDragSource struct {
+	Kind  CardDragSourceKind
+	Card  cards.Card
+	Zone  decks.Zone
+	Index int
 }
 
-func (tile *CardTile) Dragged(
-	event *fyne.DragEvent,
+type CardDragCallback func(
+	tile *CardTile,
+	source CardDragSource,
+	position fyne.Position,
+)
+
+func (tile *CardTile) SetDraggingVisual(dragging bool) {
+	if tile.image == nil {
+		return
+	}
+	if dragging {
+		tile.image.Translucency = 0.45
+	} else {
+		tile.image.Translucency = 0
+	}
+	tile.image.Refresh()
+}
+
+func (tile *CardTile) EnableDrag(
+	source CardDragSource,
+	onStart CardDragCallback,
+	onMove CardDragCallback,
+	onEnd CardDragCallback,
 ) {
-	if tile.OnDragFinished == nil {
+	tile.dragSource = &source
+	tile.OnDragStart = onStart
+	tile.OnDragMove = onMove
+	tile.OnDragEnd = onEnd
+}
+
+func (tile *CardTile) Dragged(event *fyne.DragEvent) {
+	if tile.dragSource == nil {
 		return
 	}
 
-	tile.lastDragPosition =
-		event.AbsolutePosition
+	tile.lastDragPosition = event.AbsolutePosition
 
-	// Fade the source tile to show that it is moving.
-	tile.image.Translucency = 0.45
-	tile.image.Refresh()
+	if !tile.dragging {
+		tile.dragging = true
+
+		if tile.OnDragStart != nil {
+			tile.OnDragStart(
+				tile,
+				*tile.dragSource,
+				event.AbsolutePosition,
+			)
+		}
+	}
+
+	if tile.OnDragMove != nil {
+		tile.OnDragMove(
+			tile,
+			*tile.dragSource,
+			event.AbsolutePosition,
+		)
+	}
 }
 
 func (tile *CardTile) DragEnd() {
-	tile.image.Translucency = 0
-	tile.image.Refresh()
-
-	if tile.OnDragFinished == nil {
+	if !tile.dragging || tile.dragSource == nil {
 		return
 	}
-
-	tile.OnDragFinished(
-		tile.DragZone,
-		tile.DragIndex,
-		tile.lastDragPosition,
-	)
+	tile.dragging = false
+	if tile.OnDragEnd != nil {
+		tile.OnDragEnd(
+			tile,
+			*tile.dragSource,
+			tile.lastDragPosition,
+		)
+	}
 }
 
 // NewCardTile creates a normally sized card tile.
@@ -108,10 +150,10 @@ func NewCardTileSized(
 	onRightClick func(cards.Card, bool),
 ) *CardTile {
 	tile := &CardTile{
-		Card:         card,
+		Card:          card,
 		preferredSize: size,
-		OnSelected:   onSelected,
-		OnRightClick: onRightClick,
+		OnSelected:    onSelected,
+		OnRightClick:  onRightClick,
 	}
 
 	tile.image = createCardImage(card)

@@ -19,7 +19,7 @@ type Filter struct {
 	Elements       []string
 	Types          []string
 	Traits         []string
-	CostLevels	   []string
+	CostLevels     []string
 	Expansions     []string
 	IncludeTesting bool
 }

@@ -44,7 +44,7 @@ func withAnyOption(options []string) []string {
 		0,
 		len(options)+1,
 	)
-	result = append(result,anyOption)
+	result = append(result, anyOption)
 	result = append(result, options...)
 
 	return result
@@ -68,60 +68,14 @@ func optionalValue(value string) []string {
 	return []string{value}
 }
 
-func objectContainsPosition(
-	object fyne.CanvasObject,
-	position fyne.Position,
-) bool {
-	origin :=
-		fyne.CurrentApp().
-			Driver().
-			AbsolutePositionForObject(object)
-
-	size := object.Size()
-
-	return position.X >= origin.X &&
-		position.X <= origin.X+size.Width &&
-		position.Y >= origin.Y &&
-		position.Y <= origin.Y+size.Height
-}
-
-func deckInsertionIndex(
-	grid *fyne.Container,
-	absolutePosition fyne.Position,
-) int {
-	origin :=
-		fyne.CurrentApp().
-			Driver().
-			AbsolutePositionForObject(grid)
-
-	localX := absolutePosition.X - origin.X
-	localY := absolutePosition.Y - origin.Y
-
-	for index, object := range grid.Objects {
-		position := object.Position()
-		size := object.Size()
-
-		rightHalfBoundary :=
-			position.X + size.Width/2
-
-		rowBottom :=
-			position.Y + size.Height
-
-		if localY < rowBottom &&
-			localX < rightHalfBoundary {
-			return index
-		}
-	}
-
-	return len(grid.Objects)
-}
-
 func main() {
 
 	const previewWidth float32 = 160
 	const previewHeight float32 = 224
 	mainDeckTileMinSize := fyne.NewSize(48, 67)
-	sideDeckTileMinSize := fyne.NewSize(32,45)
+	sideDeckTileMinSize := fyne.NewSize(32, 45)
+
+	dragLayer := container.NewWithoutLayout()
 
 	repository, err := cards.LoadFile("data/cards.json")
 	if err != nil {
@@ -279,10 +233,10 @@ func main() {
 
 	mainDeckGrid := container.New(
 		&deckgui.CardGridLayout{
-			Columns:			10,
-			HeightToWidth:		cardHeightToWidth,
-			Padding:			6,
-			MinimumCellWidth:	44,
+			Columns:          10,
+			HeightToWidth:    cardHeightToWidth,
+			Padding:          6,
+			MinimumCellWidth: 44,
 		},
 	)
 
@@ -296,21 +250,56 @@ func main() {
 		"Side Deck (0)",
 	)
 
+	var mainDeckPanel *fyne.Container
+	var sideDeckPanel *fyne.Container
+
+	mainDeckScroll := container.NewVScroll(
+		mainDeckGrid,
+	)
+
+	mainDeckPanel = container.NewBorder(
+		mainDeckLabel,
+		nil,
+		nil,
+		nil,
+		mainDeckScroll,
+	)
+
+	sideDeckPanel = container.NewBorder(
+		sideDeckLabel,
+		nil,
+		nil,
+		nil,
+		sideDeckGrid,
+	)
+
+	var dragController *deckgui.CardDragController
+	var refreshDeckDisplay func()
+
+	dragController = deckgui.NewCardDragController(dragLayer, mainDeckPanel, sideDeckPanel, mainDeckGrid, sideDeckGrid, func(source deckgui.CardDragSource, target *deckgui.CardDropTarget) {
+		defer refreshDeckDisplay()
+		if target == nil {
+			return
+		}
+		switch source.Kind {
+		case deckgui.DragFromSearch:
+			_, err := deck.AddCardCheckedAt(target.Zone, source.Card, 1, repository, target.Index)
+			if err != nil {
+				dialog.ShowError(err, window)
+			}
+		case deckgui.DragFromDeck:
+			_, err := deck.MoveOrderedCard(source.Zone, source.Index, target.Zone, target.Index)
+			if err != nil {
+				dialog.ShowError(err, window)
+			}
+		}
+	},
+	)
+
 	/*
 		refreshDeckDisplay is declared first because its card-tile
 		callbacks call refreshDeckDisplay again after removing a card.
 	*/
-
-	var refreshDeckDisplay func()
-
-	var handleDeckDrop func(
-		decks.Zone,
-		int,
-		fyne.Position,
-	)
-
-	var mainDeckPanel *fyne.Container
-	var sideDeckPanel *fyne.Container
 
 	refreshDeckDisplay = func() {
 		// The display is rebuilt each time, so remove the old tiles first.
@@ -354,10 +343,16 @@ func main() {
 				},
 			)
 
-			tile.EnableDeckDrag(
-				decks.MainZone,
-				currentIndex,
-				handleDeckDrop,
+			tile.EnableDrag(
+				deckgui.CardDragSource{
+					Kind:  deckgui.DragFromDeck,
+					Card:  currentCard,
+					Zone:  decks.MainZone,
+					Index: currentIndex,
+				},
+				dragController.Start,
+				dragController.Move,
+				dragController.End,
 			)
 
 			mainDeckGrid.Add(tile)
@@ -398,10 +393,16 @@ func main() {
 				},
 			)
 
-			tile.EnableDeckDrag(
-				decks.SideZone,
-				currentIndex,
-				handleDeckDrop,
+			tile.EnableDrag(
+				deckgui.CardDragSource{
+					Kind:  deckgui.DragFromDeck,
+					Card:  currentCard,
+					Zone:  decks.SideZone,
+					Index: currentIndex,
+				},
+				dragController.Start,
+				dragController.Move,
+				dragController.End,
 			)
 
 			sideDeckGrid.Add(tile)
@@ -423,75 +424,6 @@ func main() {
 		))
 	}
 
-	mainDeckScroll := container.NewVScroll(
-		mainDeckGrid,
-	)
-
-	mainDeckPanel = container.NewBorder(
-		mainDeckLabel,
-		nil,
-		nil,
-		nil,
-		mainDeckScroll,
-	)
-
-	sideDeckPanel = container.NewBorder(
-		sideDeckLabel,
-		nil,
-		nil,
-		nil,
-		sideDeckGrid,
-	)
-
-	handleDeckDrop = func(
-		fromZone decks.Zone,
-		fromIndex int,
-		position fyne.Position,
-	) {
-		var toZone decks.Zone
-		var destinationGrid *fyne.Container
-
-		switch {
-		case objectContainsPosition(
-			mainDeckPanel,
-			position,
-		):
-			toZone = decks.MainZone
-			destinationGrid = mainDeckGrid
-
-		case objectContainsPosition(
-			sideDeckPanel,
-			position,
-		):
-			toZone = decks.SideZone
-			destinationGrid = sideDeckGrid
-
-		default:
-			// Dropped outside both deck areas.
-			return
-		}
-
-		toIndex := deckInsertionIndex(
-			destinationGrid,
-			position,
-		)
-
-		moved, err := deck.MoveOrderedCard(
-			fromZone,
-			fromIndex,
-			toZone,
-			toIndex,
-		)
-		if err != nil {
-			dialog.ShowError(err, window)
-			return
-		}
-
-		if moved {
-			refreshDeckDisplay()
-		}
-	}
-
 	deckSplit := container.NewVSplit(
 		mainDeckPanel,
 		sideDeckPanel,
@@ -509,7 +441,6 @@ func main() {
 	/*
 		Right panel: card search filters and results
 	*/
-
 
 	typeSelect := widget.NewSelect(
 		withAnyOption(repository.Types()),
@@ -668,7 +599,14 @@ func main() {
 					refreshDeckDisplay()
 				},
 			)
-
+			cardTile.EnableDrag(deckgui.CardDragSource{
+				Kind: deckgui.DragFromSearch,
+				Card: matchedCard,
+			},
+				dragController.Start,
+				dragController.Move,
+				dragController.End,
+			)
 			searchResultsGrid.Add(cardTile)
 		}
 
@@ -681,7 +619,7 @@ func main() {
 		if searchTimer != nil {
 			searchTimer.Stop()
 		}
-		searchTimer = time.AfterFunc(250 * time.Millisecond, func() {fyne.Do(runSearch)})
+		searchTimer = time.AfterFunc(250*time.Millisecond, func() { fyne.Do(runSearch) })
 	}
 
 	updatingFilters := false
@@ -833,7 +771,9 @@ func main() {
 
 	refreshDeckDisplay()
 
-	window.SetContent(root)
+	window.SetContent(
+		container.NewStack(root, dragLayer),
+	)
 	runSearch()
 	window.ShowAndRun()
 }

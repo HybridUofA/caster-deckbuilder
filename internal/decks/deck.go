@@ -25,11 +25,11 @@ func NewDeck(name string) (*Deck, error) {
 type Zone string
 
 const (
-	MainZone Zone = "main"
-	SideZone Zone = "side"
-	MaxCopiesPerCard = 4
-	MaxMainDeckCards = 50
-	MaxSideDeckCards = 12
+	MainZone         Zone = "main"
+	SideZone         Zone = "side"
+	MaxCopiesPerCard      = 4
+	MaxMainDeckCards      = 50
+	MaxSideDeckCards      = 12
 )
 
 func normalizeCardName(name string) string {
@@ -157,25 +157,31 @@ func (deck *Deck) AddCardChecked(
 	quantity int,
 	repository *cards.Repository,
 ) (bool, error) {
-	deck.EnsureOrder()
-	if quantity <= 0 {
-		return false, fmt.Errorf(
-			"quantity must be greater than zero",
-		)
-	}
-
-	currentCopies := deck.CopiesOfCard(
+	return deck.AddCardCheckedAt(
+		zone,
 		card,
+		quantity,
 		repository,
+		-1,
 	)
+}
 
-	remainingCopies := MaxCopiesPerCard - currentCopies
-
-	// Already at the limit: silently do nothing.
-	if remainingCopies <= 0 {
+func (deck *Deck) AddCardCheckedAt(
+	zone Zone,
+	card cards.Card,
+	quantity int,
+	repository *cards.Repository,
+	index int,
+) (bool, error) {
+	if quantity <= 0 {
+		return false, fmt.Errorf("quantity must be greater than zero")
+	}
+	deck.EnsureOrder()
+	currentCopies := deck.CopiesOfCard(card, repository)
+	copySpace := MaxCopiesPerCard - currentCopies
+	if copySpace <= 0 {
 		return false, nil
 	}
-
 	var zoneSpace int
 	switch zone {
 	case MainZone:
@@ -183,23 +189,21 @@ func (deck *Deck) AddCardChecked(
 	case SideZone:
 		zoneSpace = MaxSideDeckCards - deck.SideTotal()
 	default:
-		return false, fmt.Errorf("unknown deck zone %q", zone)
+		return false, fmt.Errorf("unknown deck zone %v", zone)
 	}
 
 	if zoneSpace <= 0 {
 		return false, nil
 	}
-	// Prevent bulk additions from exceeding the limit.
-	if quantity > remainingCopies {
-		quantity = remainingCopies
-	}
 
-	err := deck.AddCard(
-		zone,
-		card.ID,
-		quantity,
-	)
-	if err != nil {
+	allowedQuantity := quantity
+	if allowedQuantity > copySpace {
+		allowedQuantity = copySpace
+	}
+	if allowedQuantity > zoneSpace {
+		allowedQuantity = zoneSpace
+	}
+	if err := deck.AddCard(zone, card.ID, allowedQuantity); err != nil {
 		return false, err
 	}
 
@@ -207,13 +211,12 @@ func (deck *Deck) AddCardChecked(
 	if err != nil {
 		return false, err
 	}
-
-	for copyNumber := 0;
-	copyNumber < quantity;
-	copyNumber++ {
-		*order = append(*order, card.ID)
+	if index < 0 || index > len(*order) {
+		index = len(*order)
 	}
-
+	for copyNumber := 0; copyNumber < allowedQuantity; copyNumber++ {
+		*order = insertCardID(*order, index+copyNumber, card.ID)
+	}
 	return true, nil
 }
 
@@ -418,9 +421,7 @@ func (deck *Deck) EnsureOrder() {
 		)
 
 		for _, entry := range deck.MainDeck {
-			for copyNumber := 0;
-				copyNumber < entry.Quantity;
-				copyNumber++ {
+			for copyNumber := 0; copyNumber < entry.Quantity; copyNumber++ {
 				deck.MainOrder = append(
 					deck.MainOrder,
 					entry.CardID,
@@ -437,9 +438,7 @@ func (deck *Deck) EnsureOrder() {
 		)
 
 		for _, entry := range deck.SideDeck {
-			for copyNumber := 0;
-				copyNumber < entry.Quantity;
-				copyNumber++ {
+			for copyNumber := 0; copyNumber < entry.Quantity; copyNumber++ {
 				deck.SideOrder = append(
 					deck.SideOrder,
 					entry.CardID,
@@ -529,9 +528,11 @@ func (deck *Deck) MoveOrderedCard(
 			(*source)[fromIndex+1:]...,
 		)
 
-		// The removal shifted later positions left.
-		if toIndex > fromIndex {
-			toIndex--
+		if toIndex < 0 {
+			toIndex = 0
+		}
+		if toIndex > len(updated) {
+			toIndex = len(updated)
 		}
 
 		updated = insertCardID(
