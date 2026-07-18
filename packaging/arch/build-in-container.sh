@@ -19,6 +19,11 @@ pacman -Syu --noconfirm \
 useradd --create-home builder
 install -d -o builder -g builder /build
 cp -a /workspace/packaging/. /build/
+install -m644 \
+	/build/casters-compendium.desktop \
+	/build/casters-compendium.1 \
+	/build/copyright \
+	/build/arch/
 chown -R builder:builder /build
 
 runuser -u builder -- env HOME=/home/builder bash -lc '
