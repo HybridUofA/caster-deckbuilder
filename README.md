@@ -27,7 +27,8 @@ Tabletop Simulator image sheets for both the main deck and sideboard.
    expansion, and playtesting filters in the Card Search panel. Keyword choices
    are extracted from the current card ability data, so newly published rules
    labels can appear without an application update.
-3. Left-click a search result to display its full image and card details.
+3. Hover over a card to display its full image and card details. Clicking or
+   tapping also works on devices without pointer hover.
 4. Right-click a search result to add one copy to the Main Deck. Hold **Shift**
    while right-clicking to add one copy to the Side Deck. A search result can
    also be dragged directly into either deck area.

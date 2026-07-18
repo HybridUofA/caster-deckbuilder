@@ -35,6 +35,7 @@ type CardTile struct {
 }
 
 var _ fyne.Draggable = (*CardTile)(nil)
+var _ desktop.Hoverable = (*CardTile)(nil)
 var _ desktop.Mouseable = (*CardTile)(nil)
 
 type CardDragSourceKind int
@@ -220,8 +221,26 @@ func (tile *CardTile) MinSize() fyne.Size {
 	return tile.preferredSize
 }
 
-// Normal left click.
+// Tapped selects the card as a fallback for touch devices and direct clicks.
 func (tile *CardTile) Tapped(_ *fyne.PointEvent) {
+	tile.selectCard()
+}
+
+// MouseIn selects the card when the pointer enters its tile.
+func (tile *CardTile) MouseIn(_ *desktop.MouseEvent) {
+	tile.selectCard()
+}
+
+// MouseMoved leaves the current selection unchanged while the pointer remains over the tile.
+func (tile *CardTile) MouseMoved(_ *desktop.MouseEvent) {
+}
+
+// MouseOut preserves the most recently previewed card when the pointer leaves its tile.
+func (tile *CardTile) MouseOut() {
+}
+
+// selectCard sends the tile's card to the configured preview callback.
+func (tile *CardTile) selectCard() {
 	if tile.OnSelected != nil {
 		tile.OnSelected(tile.Card)
 	}

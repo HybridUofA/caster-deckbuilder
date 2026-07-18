@@ -651,7 +651,7 @@ func showApplication(
 				matchedCard,
 
 				/*
-					Left-click:
+					Hover or click:
 					Show the card in the preview panel.
 				*/
 				func(selected cards.Card) {

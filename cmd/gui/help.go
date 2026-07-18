@@ -15,7 +15,8 @@ const howToUseMarkdown = `# How to Use Caster's Compendium
 2. Use the filters in **Card Search** to find cards. The **Keyword** filter is
    built automatically from the current card ability data, so it includes rules
    labels such as Break, Enter, Last Words, Quickcast, Unity, and others.
-3. **Left-click** a search result to view its full image and details.
+3. **Hover over** a card to view its full image and details. Clicking or tapping
+   also works on devices without pointer hover.
 4. **Right-click** a search result to add one copy to the Main Deck.
 5. Hold **Shift** while right-clicking to add one copy to the Side Deck.
 
