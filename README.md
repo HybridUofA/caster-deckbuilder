@@ -100,8 +100,8 @@ security prompts may therefore require the user to explicitly allow the first
 launch. Code signing can be added later when the appropriate Apple Developer and
 Windows signing certificates are available.
 
-Fyne's packaging tool uses `data/images/MTD-back-ver01.png` as the application
-icon and embeds the card back separately for Tabletop Simulator exports.
+Fyne's packaging tool uses `data/images/shadow.png` as the application icon and
+embeds `MTD-back-ver01.png` separately for Tabletop Simulator exports.
 
 Debian and Ubuntu users can install the native package with:
 

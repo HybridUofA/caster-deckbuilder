@@ -62,7 +62,7 @@ package() {
     'casters-compendium.desktop' \
     "$pkgdir/usr/share/applications/casters-compendium.desktop"
   install -Dm644 \
-    "$pkgname/data/images/MTD-back-ver01.png" \
+    "$pkgname/data/images/shadow.png" \
     "$pkgdir/usr/share/pixmaps/casters-compendium.png"
   install -Dm644 \
     "$pkgname/README.md" \

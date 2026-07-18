@@ -88,7 +88,7 @@ jobs:
             --os linux \
             --executable "$PWD/dist/CastersCompendium" \
             --name "$APP_NAME" \
-            --icon "$PWD/data/images/MTD-back-ver01.png" \
+            --icon "$PWD/data/images/shadow.png" \
             --appID "$APP_ID" \
             --appVersion "$APP_VERSION" \
             --appBuild "$APP_BUILD" \
@@ -120,7 +120,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          $icon = (Resolve-Path "data/images/MTD-back-ver01.png").Path
+          $icon = (Resolve-Path "data/images/shadow.png").Path
           go run fyne.io/fyne/v2/cmd/fyne@v2.8.0 package `
             --os windows `
             --sourceDir ./cmd/gui `
@@ -153,7 +153,7 @@ jobs:
             --os darwin \
             --executable "$PWD/dist/CastersCompendium" \
             --name "$APP_NAME" \
-            --icon "$PWD/data/images/MTD-back-ver01.png" \
+            --icon "$PWD/data/images/shadow.png" \
             --appID "$APP_ID" \
             --appVersion "$APP_VERSION" \
             --appBuild "$APP_BUILD" \

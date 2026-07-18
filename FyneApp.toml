@@ -3,7 +3,7 @@ Name = "Caster's Compendium"
 ID = "io.github.hybriduofa.casterdeckbuilder"
 Version = "0.1.2"
 Build = 1
-Icon = "data/images/MTD-back-ver01.png"
+Icon = "data/images/shadow.png"
 
 [Migrations]
 fyneDo = true

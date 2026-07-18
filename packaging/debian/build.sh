@@ -32,7 +32,7 @@ install -Dm644 \
 	packaging/casters-compendium.desktop \
 	"$package_root/usr/share/applications/casters-compendium.desktop"
 install -Dm644 \
-	data/images/MTD-back-ver01.png \
+	data/images/shadow.png \
 	"$package_root/usr/share/pixmaps/casters-compendium.png"
 install -Dm644 \
 	README.md \
