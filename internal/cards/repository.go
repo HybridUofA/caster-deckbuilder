@@ -9,9 +9,10 @@ import (
 )
 
 type Repository struct {
-	cards  []Card
-	byID   map[string]Card
-	byName map[string][]Card
+	cards       []Card
+	searchCards []Card
+	byID        map[string]Card
+	byName      map[string][]Card
 }
 
 type Filter struct {
@@ -96,8 +97,42 @@ func NewRepository(cards []Card) (*Repository, error) {
 			card,
 		)
 	}
+	repository.searchCards = preferredSearchPrintings(repository.cards)
 
 	return repository, nil
+}
+
+// preferredSearchPrintings collapses records that use the exact same image
+// asset, keeping the lowest card number. Duplicate source records remain in the
+// repository indexes so existing decks and explicit printing imports resolve.
+func preferredSearchPrintings(cardList []Card) []Card {
+	preferred := make([]Card, 0, len(cardList))
+	imageIndexes := make(map[string]int)
+
+	for _, card := range cardList {
+		imageURL := strings.TrimSpace(card.ImageURL)
+		if imageURL == "" {
+			preferred = append(preferred, card)
+			continue
+		}
+
+		index, found := imageIndexes[imageURL]
+		if !found {
+			imageIndexes[imageURL] = len(preferred)
+			preferred = append(preferred, card)
+			continue
+		}
+
+		current := preferred[index]
+		cardNumber := normalizeText(card.CardNumber)
+		currentNumber := normalizeText(current.CardNumber)
+		if cardNumber != "" &&
+			(currentNumber == "" || cardNumber < currentNumber) {
+			preferred[index] = card
+		}
+	}
+
+	return preferred
 }
 
 // normalizeText trims and case-folds text for case-insensitive matching.
@@ -131,7 +166,7 @@ func (repository *Repository) SearchByName(query string) []Card {
 
 	var matches []Card
 
-	for _, card := range repository.cards {
+	for _, card := range repository.searchCards {
 		normalizedCardName := normalizeText(card.Name)
 
 		if strings.Contains(normalizedCardName, normalizedQuery) {
@@ -173,7 +208,7 @@ func (repository *Repository) Filter(options Filter) []Card {
 
 	var matches []Card
 
-	for _, card := range repository.cards {
+	for _, card := range repository.searchCards {
 		if normalizedName != "" &&
 			!strings.Contains(normalizeText(card.Name), normalizedName) {
 			continue

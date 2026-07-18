@@ -67,12 +67,13 @@ func TestBundledDatabaseKeywords(t *testing.T) {
 }
 
 // TestFilterByKeyword verifies that keyword filtering composes with existing
-// filters and does not match a keyword embedded inside a larger word.
+// filters and only matches labels, not references within effect prose.
 func TestFilterByKeyword(t *testing.T) {
 	repository, err := NewRepository([]Card{
 		{ID: "1", Name: "Matching", Type: "Servant", Ability: "Enter: Draw a card."},
 		{ID: "2", Name: "Wrong type", Type: "Conjure", Ability: "Enter: Draw a card."},
 		{ID: "3", Name: "Wrong word", Type: "Servant", Ability: "A servant entered the field."},
+		{ID: "4", Name: "Keyword reference", Type: "Servant", Ability: "Rest: This card gains Enter."},
 	})
 	if err != nil {
 		t.Fatalf("NewRepository() error = %v", err)
@@ -84,5 +85,66 @@ func TestFilterByKeyword(t *testing.T) {
 	})
 	if len(matches) != 1 || matches[0].ID != "1" {
 		t.Fatalf("Filter() = %#v, want only card 1", matches)
+	}
+}
+
+// TestBreakFilterExcludesEffectReferences covers cards that discuss Break but
+// do not have Break as one of their own ability labels.
+func TestBreakFilterExcludesEffectReferences(t *testing.T) {
+	repository, err := LoadFile("../../data/cards.json")
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	for _, card := range repository.Filter(Filter{
+		Keywords:       []string{"Break"},
+		IncludeTesting: true,
+	}) {
+		if card.ID == "181" || card.ID == "186" {
+			t.Errorf(
+				"Break filter included %s (%s), whose ability only references Break",
+				card.Name,
+				card.CardNumber,
+			)
+		}
+	}
+}
+
+// TestBundledSearchPrefersDDPrintings covers upstream PR records that point to
+// the same DD artwork instead of a distinct promo image.
+func TestBundledSearchPrefersDDPrintings(t *testing.T) {
+	repository, err := LoadFile("../../data/cards.json")
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	passionIDs := make(map[string]bool)
+	for _, card := range repository.Filter(Filter{
+		Name:           "Passion Wing",
+		IncludeTesting: true,
+	}) {
+		passionIDs[card.ID] = true
+	}
+	if !passionIDs["1"] || !passionIDs["186"] || passionIDs["181"] {
+		t.Errorf("Passion Wing search IDs = %#v, want DD card 1 and distinct promo 186", passionIDs)
+	}
+
+	pentachiIDs := make(map[string]bool)
+	for _, card := range repository.Filter(Filter{
+		Name:           "Pentachi",
+		IncludeTesting: true,
+	}) {
+		pentachiIDs[card.ID] = true
+	}
+	if !pentachiIDs["78"] || pentachiIDs["182"] {
+		t.Errorf("Pentachi search IDs = %#v, want only DD card 78", pentachiIDs)
+	}
+
+	// Duplicate IDs remain addressable for compatibility with saved decks.
+	if _, found := repository.FindByID("181"); !found {
+		t.Error("duplicate printing ID 181 no longer resolves")
+	}
+	if _, found := repository.FindByID("182"); !found {
+		t.Error("duplicate printing ID 182 no longer resolves")
 	}
 }

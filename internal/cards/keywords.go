@@ -103,37 +103,23 @@ func validKeyword(candidate string) (string, bool) {
 	return candidate, true
 }
 
-// matchesAnyKeyword reports whether ability contains any selected keyword as
-// a whole word or whole phrase.
+// matchesAnyKeyword reports whether ability declares any selected keyword as
+// a rules label. Mentions inside effect prose do not make the card a keyword
+// card; for example, "cards they control lose Break" does not declare Break.
 func matchesAnyKeyword(ability string, selected []string) bool {
-	abilityWords := searchableWords(ability)
-
+	selectedKeywords := make(map[string]bool, len(selected))
 	for _, keyword := range selected {
-		keywordWords := searchableWords(keyword)
-		if len(keywordWords) == 0 || len(keywordWords) > len(abilityWords) {
-			continue
+		if normalized := normalizeText(keyword); normalized != "" {
+			selectedKeywords[normalized] = true
 		}
+	}
 
-		for start := 0; start+len(keywordWords) <= len(abilityWords); start++ {
-			matched := true
-			for offset, word := range keywordWords {
-				if abilityWords[start+offset] != word {
-					matched = false
-					break
-				}
-			}
-			if matched {
-				return true
-			}
+	for _, line := range strings.Split(ability, "\n") {
+		keyword, found := abilityKeyword(line)
+		if found && selectedKeywords[normalizeText(keyword)] {
+			return true
 		}
 	}
 
 	return false
-}
-
-// searchableWords tokenizes rules text for case-insensitive phrase matching.
-func searchableWords(value string) []string {
-	return strings.FieldsFunc(strings.ToLower(value), func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
-	})
 }
