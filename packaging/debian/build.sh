@@ -25,7 +25,7 @@ go build \
 	-trimpath \
 	-ldflags="-s -w" \
 	-o "$package_root/usr/bin/casters-compendium" \
-	./cmd/gui
+	./cmd/deckbuilder
 chmod 755 "$package_root/usr/bin/casters-compendium"
 
 install -Dm644 \

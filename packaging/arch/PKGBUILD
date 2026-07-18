@@ -51,7 +51,7 @@ build() {
     -trimpath \
     -ldflags='-s -w' \
     -o CastersCompendium \
-    ./cmd/gui
+    ./cmd/deckbuilder
 }
 
 package() {

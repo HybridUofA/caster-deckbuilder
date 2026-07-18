@@ -56,7 +56,7 @@ Install Go and the native prerequisites listed in the
 [Fyne quick-start documentation](https://docs.fyne.io/started/quick/), then run:
 
 ```sh
-go run ./cmd/gui
+go run ./cmd/deckbuilder
 ```
 
 Tests, including the stricter Fyne threading migration, run with:
@@ -68,10 +68,11 @@ go test -tags migrated_fynedo ./...
 
 ## Local application data
 
-The application keeps downloaded data under Fyne's per-user configuration
-directory. The stable application ID remains
+The applications share downloaded data under Fyne's per-user configuration
+directory. The stable storage application ID remains
 `io.github.hybriduofa.casterdeckbuilder`, even though the display name changed,
-so existing installations continue to use the same files.
+so existing deckbuilder installations continue to use the same files and the
+future simulator will not create a second card database or image cache.
 
 - Linux: `${XDG_CONFIG_HOME:-$HOME/.config}/fyne/io.github.hybriduofa.casterdeckbuilder`
 - macOS: `~/Library/Preferences/fyne/io.github.hybriduofa.casterdeckbuilder`
@@ -80,6 +81,31 @@ so existing installations continue to use the same files.
 The directory contains `cards.json`, `cardlist.sha256`, `images/`, `thumbnails/`,
 and the setup-completion marker. Deck and export files remain wherever the user
 selected in the save dialog.
+
+## Repository architecture
+
+The repository is organized as one Go module with application-specific code
+around shared card and game packages:
+
+```text
+cmd/
+  deckbuilder/          Deckbuilder executable and Fyne metadata
+  simulator/            Reserved simulator command
+  tools/                Card-data and legacy CLI utilities
+internal/
+  carddata/             Catalog, local paths, image cache, and normalization
+  deckbuilder/          Deckbuilder application, UI, and TTS export
+  deckio/               Shared JSON and text deck formats
+  game/                 Simulator-safe card and deck domain logic
+  simulator/            Reserved simulator packages
+  sources/              External card-data clients
+data/                    Published card snapshot and bootstrap artwork
+packaging/               Linux distribution and desktop package definitions
+```
+
+Packages under `internal/game` do not depend on Fyne, HTTP, or filesystem
+storage. Both applications can consume the same game models, `deckio` formats,
+and OS-local `carddata` paths without importing one another.
 
 ## Desktop packages and releases
 

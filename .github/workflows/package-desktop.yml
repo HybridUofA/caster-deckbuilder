@@ -5,11 +5,17 @@ on:
   push:
     branches:
       - feature/casters-compendium
+      - refactor/compendium-monorepo
     tags:
       - "v*"
     paths:
       - ".github/workflows/package-desktop.yml"
+      - "cmd/**"
+      - "internal/**"
+      - "data/**"
       - "packaging/**"
+      - "go.mod"
+      - "go.sum"
 
 permissions:
   contents: read
@@ -83,7 +89,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          go build -tags migrated_fynedo -trimpath -ldflags="-s -w" -o dist/CastersCompendium ./cmd/gui
+          go build -tags migrated_fynedo -trimpath -ldflags="-s -w" -o dist/CastersCompendium ./cmd/deckbuilder
           go run fyne.io/fyne/v2/cmd/fyne@v2.8.0 package \
             --os linux \
             --executable "$PWD/dist/CastersCompendium" \
@@ -123,7 +129,7 @@ jobs:
           $icon = (Resolve-Path "data/images/shadow.png").Path
           go run fyne.io/fyne/v2/cmd/fyne@v2.8.0 package `
             --os windows `
-            --sourceDir ./cmd/gui `
+            --sourceDir ./cmd/deckbuilder `
             --name "$env:APP_NAME" `
             --icon "$icon" `
             --appID "$env:APP_ID" `
@@ -131,7 +137,7 @@ jobs:
             --appBuild "$env:APP_BUILD" `
             --tags migrated_fynedo `
             --release
-          Move-Item "cmd/gui/$env:APP_NAME.exe" "dist/${{ matrix.artifact }}.exe"
+          Move-Item "cmd/deckbuilder/$env:APP_NAME.exe" "dist/${{ matrix.artifact }}.exe"
 
       - name: Build Windows diagnostic executable
         if: matrix.target == 'windows' && github.ref_type != 'tag'
@@ -141,14 +147,14 @@ jobs:
             -tags migrated_fynedo `
             -trimpath `
             -o "dist/${{ matrix.artifact }}.diagnostic.exe" `
-            ./cmd/gui
+            ./cmd/deckbuilder
 
       - name: Package macOS application
         if: startsWith(matrix.target, 'darwin-')
         shell: bash
         run: |
           mkdir -p dist
-          go build -tags migrated_fynedo -trimpath -ldflags="-s -w" -o dist/CastersCompendium ./cmd/gui
+          go build -tags migrated_fynedo -trimpath -ldflags="-s -w" -o dist/CastersCompendium ./cmd/deckbuilder
           go run fyne.io/fyne/v2/cmd/fyne@v2.8.0 package \
             --os darwin \
             --executable "$PWD/dist/CastersCompendium" \
